@@ -510,6 +510,13 @@
                 valorZoom.textContent = escalaZoom1.toFixed(1) + 'x';
             }
         }
+const parametrosURL = new URLSearchParams(window.location.search);
+if (parametrosURL.get('p') === '2') {
+    miRol = 'jugador2';
+    document.getElementById('btn-rol').textContent = '👤 Rol: J2';
+    selectorZoom.value = escalaZoom2 * 10;
+    valorZoom.textContent = escalaZoom2.toFixed(1) + 'x';
+}
 
         function obtenerPosicionMundo(e) {
             const rect = canvas.getBoundingClientRect();
