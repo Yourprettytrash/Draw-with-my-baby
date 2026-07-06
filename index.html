@@ -310,6 +310,27 @@
             <input type="range" id="selector-zoom" min="10" max="40" value="10">
             <span class="num-val" id="valor-zoom">1.0x</span>
         </div>
+<!-- TABLERO DEL MODO ADIVINA EL DIBUJO -->
+<div id="contenedor-juego" style="background: #1e1e1e; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; display: none;">
+    <h3 id="titulo-juego" style="color: #ffcc00; margin: 0 0 5px 0;">🎮 Modo Pictionary Activo</h3>
+    
+    <!-- Lo que ve el que dibuja -->
+    <div id="zona-dibujante" style="display: none;">
+        <p style="color: white; margin: 5px 0;">Te toca dibujar la palabra:</p>
+        <h2 id="palabra-secreta-pantalla" style="color: #00ffcc; margin: 5px 0; font-size: 24px;">---</h2>
+        <button class="btn" onclick="cambiarPalabraAlAzar()" style="background: #555;">🔄 Cambiar palabra</button>
+    </div>
+
+    <!-- Lo que ve el que adivina -->
+    <div id="zona-adivinador" style="display: none;">
+        <p style="color: white; margin: 5px 0;">¡Intenta adivinar lo que están dibujando!</p>
+        <input type="text" id="input-adivinar" placeholder="Escribe tu respuesta aquí..." style="padding: 8px; border-radius: 4px; border: none; width: 70%; max-width: 250px;">
+        <button class="btn" onclick="verificarRespuesta()" style="background: #00ffcc; color: black; font-weight: bold;">Enviar</button>
+    </div>
+</div>
+
+<!-- BOTÓN PARA ENCENDER EL JUEGO -->
+<button class="btn" id="btn-modo-juego" onclick="alternarModoJuego()" style="background: #ffcc00; color: black; font-weight: bold;">🎮 Jugar Pictionary</button>
 
         <div class="fila">
             <button class="btn" id="btn-estabilizador" onclick="toggleEstabilizador()">✨ Suave</button>
@@ -917,6 +938,165 @@ if (parametrosURL.get('p') === '2') {
 
         construirMatrizColores();
         requestAnimationFrame(bucleRender);
+        // ====== MOTOR DEL MODO PICTIONARY ======
+let modoJuegoActivo = false;
+let palabrasDiccionario = [
+    // Animales
+    "gato", "perro", "elefante", "jirafa", "tiburon", "mariposa", "leon", "pajaro", "tortuga", "conejo",
+    // Cosas / Objetos
+    "guitarra", "celular", "computadora", "llave", "reloj", "paraguas", "botella", "zapato", "silla", "lampara",
+    // Comida
+    "helado", "pizza", "hamburguesa", "manzana", "platano", "sushi", "pastel", "taco", "huevo", "queso",
+    // Lugares / Naturaleza
+    "casa", "playa", "montaña", "bosque", "castillo", "volcan", "rio", "isla", "iglesia", "escuela",
+    // Fantasía
+    "titan", "dragon", "fantasma", "alien", "astronauta", "robot", "pirata", "mago", "zombie", "unicornio",
+    // Acciones
+    "correr", "volar", "dormir", "cantar", "bailar", "llorar", "cocinar", "escribir", "saltar", "nadar"
+];
+
+// Activar o desactivar el panel de juego
+function alternarModoJuego() {
+    modoJuegoActivo = !modoJuegoActivo;
+    const panel = document.getElementById('contenedor-juego');
+    const btn = document.getElementById('btn-modo-juego');
+    
+    if (modoJuegoActivo) {
+        panel.style.display = 'block';
+        btn.textContent = '❌ Salir del Juego';
+        btn.style.background = '#ff4444';
+        btn.style.color = 'white';
+        // Activar el estado global en Firebase
+        database.ref('partida_juego/activo').set(true);
+        configurarRolesJuego();
+    } else {
+        panel.style.display = 'none';
+        btn.textContent = '🎮 Jugar Pictionary';
+        btn.style.background = '#ffcc00';
+        btn.style.color = 'black';
+        database.ref('partida_juego/activo').set(false);
+    }
+}
+
+// Configurar qué ve cada jugador según su Rol
+function configurarRolesJuego() {
+    database.ref('partida_juego').once('value', (snapshot) => {
+        const datos = snapshot.val() || {};
+        let turnoActual = datos.turno || 'jugador1'; 
+        
+        const esMiTurnoDibujar = (miRol === turnoActual);
+        
+        document.getElementById('zona-dibujante').style.display = esMiTurnoDibujar ? 'block' : 'none';
+        document.getElementById('zona-adivinador').style.display = esMiTurnoDibujar ? 'none' : 'block';
+        
+        if (esMiTurnoDibujar) {
+            if (datos.palabra) {
+                document.getElementById('palabra-secreta-pantalla').textContent = datos.palabra.toUpperCase();
+            } else {
+                cambiarPalabraAlAzar();
+            }
+        }
+    });
+}
+
+// Seleccionar palabra aleatoria
+function cambiarPalabraAlAzar() {
+    const indice = Math.floor(Math.random() * palabrasDiccionario.length);
+    const nuevaPalabra = palabrasDiccionario[indice];
+    
+    database.ref('partida_juego/palabra').set(nuevaPalabra);
+    database.ref('partida_juego/estado').set('jugando');
+}
+
+// Verificar si el adivinador acertó
+function verificarRespuesta() {
+    const intento = document.getElementById('input-adivinar').value.trim().toLowerCase();
+    database.ref('partida_juego/palabra').once('value', (snapshot) => {
+        const palabraCorrecta = snapshot.val();
+        if (intento === palabraCorrecta) {
+            // Declarar victoria en Firebase
+            database.ref('partida_juego/estado').set('victoria');
+            document.getElementById('input-adivinar').value = '';
+        } else {
+            alert('❌ ¡Nop! Sigue intentando.');
+        }
+    });
+}
+
+// Escuchar cambios de Firebase en tiempo real para coordinar las dos pantallas
+database.ref('partida_juego').on('value', (snapshot) => {
+    const datos = snapshot.val();
+    if (!datos) return;
+
+    // Sincronizar encendido/apagado del juego
+    if (datos.activo !== undefined) {
+        const panel = document.getElementById('contenedor-juego');
+        const btn = document.getElementById('btn-modo-juego');
+        modoJuegoActivo = datos.activo;
+        panel.style.display = modoJuegoActivo ? 'block' : 'none';
+        
+        if (modoJuegoActivo) {
+            btn.textContent = '❌ Salir del Juego';
+            btn.style.background = '#ff4444';
+            btn.style.color = 'white';
+            
+            // Re-evaluar paneles de roles en tiempo real
+            let turnoActual = datos.turno || 'jugador1';
+            const esMiTurnoDibujar = (miRol === turnoActual);
+            document.getElementById('zona-dibujante').style.display = esMiTurnoDibujar ? 'block' : 'none';
+            document.getElementById('zona-adivinador').style.display = esMiTurnoDibujar ? 'none' : 'block';
+            
+            if (esMiTurnoDibujar && datos.palabra) {
+                document.getElementById('palabra-secreta-pantalla').textContent = datos.palabra.toUpperCase();
+            }
+        } else {
+            btn.textContent = '🎮 Jugar Pictionary';
+            btn.style.background = '#ffcc00';
+            btn.style.color = 'black';
+        }
+    }
+
+    // Si alguien ganó, mostrar cartel de victoria gigante y alternar turnos
+    if (datos.estado === 'victoria') {
+        database.ref('partida_juego/estado').set('procesando'); // Evitar bucles
+
+        // Crear pantalla flotante de victoria armada en JS
+        const anuncio = document.createElement('div');
+        anuncio.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); color: #ffcc00; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; font-family: sans-serif; text-align: center; padding: 20px; box-sizing: border-box;">
+                <h1 style="font-size: 38px; margin: 0; text-shadow: 0 0 10px #ffcc00;">🎉 ¡LO HICISTE! 🎉</h1>
+                <p style="color: white; font-size: 22px; margin: 15px 0;">Adivinaron la palabra: <span style="color: #00ffcc;">${datos.palabra.toUpperCase()}</span></p>
+                <p style="color: #aaaaaa; font-size: 16px;">Siguiente ronda en 3 segundos...</p>
+            </div>
+        `;
+        document.body.appendChild(anuncio);
+
+        // Limpiar la pizarra automáticamente para la nueva ronda
+        if (typeof limpiarLienzo === 'function') limpiarLienzo();
+
+        // Esperar 3 segundos para limpiar el aviso y rotar el turno
+        setTimeout(() => {
+            anuncio.remove();
+            // Solo el Jugador 1 gestiona el cambio en Firebase para evitar doble gasto de recursos
+            if (miRol === 'jugador1') {
+                let siguienteTurno = (datos.turno === 'jugador2') ? 'jugador1' : 'jugador2';
+                const indice = Math.floor(Math.random() * palabrasDiccionario.length);
+                const nuevaPalabra = palabrasDiccionario[indice];
+                
+                database.ref('partida_juego').update({
+                    turno: siguienteTurno,
+                    palabra: nuevaPalabra,
+                    estado: 'jugando'
+                });
+            }
+        }, 3000);
+    }
+});
+
     </script>
 </body>
 </html>
+
+
+  
+
