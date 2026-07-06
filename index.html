@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuestra Pizarra Pro Vectorial</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #121212; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start; 
+            min-height: 100vh; 
+            color: white; 
+            font-family: sans-serif; 
+            overflow-x: hidden; 
+            padding-top: 6px; 
+        }
+        
+        .panel-control { 
+            display: flex; 
+            flex-direction: column; 
+            background-color: #1e1e1e; 
+            padding: 8px; 
+            border-radius: 14px; 
+            width: 95vw; 
+            max-width: 380px; 
+            gap: 5px; 
+            box-shadow: 0px 4px 20px rgba(0,0,0,0.6); 
+            margin-bottom: 6px; 
+            box-sizing: border-box; 
+            border: 1px solid #2d2d2d; 
+        }
+        
+        .fila { 
+            display: flex; 
+            gap: 4px; 
+            justify-content: space-between; 
+            align-items: center; 
+            width: 100%; 
+        }
+        
+        .fila-colores-rapida { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            width: 100%; 
+            background: #151515; 
+            padding: 5px 10px; 
+            border-radius: 8px; 
+            box-sizing: border-box; 
+        }
+        
+        .color-rapido { 
+            width: 22px; 
+            height: 22px; 
+            border-radius: 50%; 
+            border: 1.5px solid rgba(255,255,255,0.2); 
+            cursor: pointer; 
+            transition: transform 0.1s; 
+            position: relative; 
+        }
+        
+        .preview-actual-contenedor { 
+            display: flex; 
+            align-items: center; 
+            gap: 4px; 
+            font-size: 10px; 
+            font-weight: bold; 
+            color: #888; 
+            margin-left: auto; 
+        }
+        
+        #vista-color-actual { 
+            width: 16px; 
+            height: 16px; 
+            border-radius: 50%; 
+            border: 1.5px solid white; 
+            background-color: #000000; 
+            box-shadow: 0 0 4px rgba(255,255,255,0.3); 
+        }
+        
+        .btn-paleta-trigger { 
+            background: linear-gradient(45deg, #ff4a5a, #ff9500); 
+            border: none; 
+            color: white; 
+            font-size: 10px; 
+            padding: 5px 10px; 
+            border-radius: 6px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            text-transform: uppercase; 
+        }
+
+        .color-rapido.activo, .bloque-color-matrix.activo { 
+            border: 2px solid #ffffff !important; 
+            outline: 1.5px solid #000000; 
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8); 
+            transform: scale(1.15); 
+            z-index: 5; 
+        }
+
+        .btn { 
+            background-color: #2d2d2d; 
+            border: 1px solid #444; 
+            color: #ccc; 
+            padding: 6px 3px; 
+            border-radius: 6px; 
+            font-size: 9.5px; 
+            cursor: pointer; 
+            flex: 1; 
+            text-align: center; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+        }
+        
+        .btn.activo { 
+            background-color: #ff4a5a; 
+            border-color: #ff4a5a; 
+            color: white; 
+        }
+        
+        .btn-rojo { 
+            background-color: #3a1a1a; 
+            border-color: #632222; 
+            color: #ff6b6b; 
+        }
+        
+        .btn-verde { 
+            background-color: #1a3a22; 
+            border-color: #226330; 
+            color: #6bff84; 
+        }
+
+        label { 
+            font-size: 11px; 
+            color: #aaa; 
+            min-width: 45px; 
+        }
+        
+        input[type="range"] { 
+            flex: 1; 
+            accent-color: #ff4a5a; 
+            height: 4px; 
+        }
+        
+        .num-val { 
+            font-size: 11px; 
+            color: #ff4a5a; 
+            min-width: 25px; 
+            text-align: right; 
+        }
+
+        .contenedor-lienzo { 
+            width: 95vw; 
+            max-width: 380px; 
+            height: 460px; 
+            border: 3px solid #ff4a5a; 
+            border-radius: 14px; 
+            overflow: hidden; 
+            background-color: #ffffff; 
+            position: relative; 
+            box-shadow: 0px 10px 30px rgba(0,0,0,0.7); 
+        }
+        
+        canvas { 
+            background-color: #ffffff; 
+            touch-action: none; 
+            display: block; 
+            width: 100%;
+            height: 100%;
+        }
+
+        #ventana-lupa { 
+            position: absolute; 
+            width: 70px; 
+            height: 70px; 
+            border-radius: 50%; 
+            border: 2.5px solid #ff4a5a; 
+            background-color: #fff; 
+            box-shadow: 0 6px 15px rgba(0,0,0,0.5); 
+            display: none; 
+            pointer-events: none; 
+            overflow: hidden; 
+            z-index: 80; 
+        }
+        
+        .modal-paleta-avanzada { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background-color: rgba(20,20,20,0.95); 
+            z-index: 20; 
+            display: none; 
+            flex-direction: column; 
+            padding: 12px; 
+            box-sizing: border-box; 
+        }
+        
+        .modal-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 10px; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 6px; 
+        }
+        
+        .modal-header span { 
+            font-size: 12px; 
+            font-weight: bold; 
+            color: #ff4a5a; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+        }
+        
+        .btn-cerrar-modal { 
+            background: #333; 
+            border: 1px solid #555; 
+            color: white; 
+            border-radius: 4px; 
+            padding: 2px 8px; 
+            font-size: 11px; 
+            cursor: pointer; 
+        }
+        
+        .grid-matrix-colores { 
+            display: grid; 
+            grid-template-columns: repeat(10, 1fr); 
+            gap: 2.5px; 
+            width: 100%; 
+            flex: 1; 
+            background: #000; 
+            padding: 4px; 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+            align-items: center; 
+        }
+        
+        .bloque-color-matrix { 
+            width: 100%; 
+            height: 100%; 
+            min-height: 30px; 
+            cursor: pointer; 
+            border: 1px solid rgba(0,0,0,0.4); 
+            box-sizing: border-box; 
+            transition: transform 0.1s; 
+            border-radius: 3px; 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel-control">
+        <div class="fila-colores-rapida">
+            <div class="color-rapido activo" id="rapido-#000000" style="background: #000000;" onclick="cambiarColor('#000000', this)"></div>
+            <div class="color-rapido" id="rapido-#ff3b30" style="background: #ff3b30;" onclick="cambiarColor('#ff3b30', this)"></div>
+            <div class="color-rapido" id="rapido-#4cd964" style="background: #4cd964;" onclick="cambiarColor('#4cd964', this)"></div>
+            <div class="color-rapido" id="rapido-#007aff" style="background: #007aff;" onclick="cambiarColor('#007aff', this)"></div>
+            <div class="color-rapido" id="rapido-#ffcc00" style="background: #ffcc00;" onclick="cambiarColor('#ffcc00', this)"></div>
+            
+            <div class="preview-actual-contenedor">
+                <div id="vista-color-actual"></div>
+                <button class="btn-paleta-trigger" onclick="abrirPaletaAvanzada()">🎨 Matrix</button>
+            </div>
+        </div>
+
+        <div class="fila">
+            <button class="btn activo" id="btn-normal" onclick="cambiarModo('normal')">Normal</button>
+            <button class="btn" id="btn-manga" onclick="cambiarModo('manga')">✒️ Manga</button>
+            <button class="btn" id="btn-cuadrado" onclick="cambiarModo('cuadrado')">Plano</button>
+            <button class="btn" id="btn-spray" onclick="cambiarModo('spray')">Graffiti</button>
+            <button class="btn" id="btn-neon" onclick="cambiarModo('neon')">🚨 Neon</button>
+        </div>
+
+        <div class="fila">
+            <button class="btn" id="btn-regla" onclick="cambiarModo('regla')">📏 Regla</button>
+            <button class="btn" id="btn-arcoiris" onclick="cambiarModo('arcoiris')">Arcoiris</button>
+            <button class="btn" id="btn-simetria" onclick="cambiarModo('simetria')">🪞 Espejo</button>
+            <button class="btn" id="btn-cinta" onclick="cambiarModo('cinta')">🎀 Cinta 3D</button>
+            <button class="btn" id="btn-eco" onclick="cambiarModo('eco')">👻 Eco Visual</button>
+        </div>
+
+        <div class="fila">
+            <button class="btn" id="btn-borrador" onclick="cambiarModo('borrador')">🧽 Borrar</button>
+            <button class="btn" id="btn-mover" onclick="cambiarModo('mover')">✋ Mover</button>
+            <button class="btn" id="btn-dividido" onclick="togglePantallaDividida()">🌓 Dividir</button>
+            <button class="btn" style="color:#ff4a5a;" onclick="deshacer()">↩️ Deshacer</button>
+            <button class="btn btn-rojo" onclick="limpiarLienzo()">🗑️ Limpiar</button>
+        </div>
+
+        <div class="fila">
+            <label>Grosor:</label>
+            <input type="range" id="selector-grosor" min="2" max="50" value="6">
+            <span class="num-val" id="valor-grosor">6</span>
+            <button class="btn btn-verde" onclick="descargarDibujo()" style="flex:0.3">💾</button>
+        </div>
+        
+        <div class="fila">
+            <label>Zoom:</label>
+            <input type="range" id="selector-zoom" min="10" max="40" value="10">
+            <span class="num-val" id="valor-zoom">1.0x</span>
+        </div>
+
+        <div class="fila">
+            <button class="btn" id="btn-estabilizador" onclick="toggleEstabilizador()">✨ Suave</button>
+            <button class="btn" id="btn-rejilla" onclick="toggleRejilla()">🌐 Rejilla</button>
+            <button class="btn" id="btn-rol" onclick="toggleRolTest()">👤 Rol: J1</button>
+        </div>
+    </div>
+
+    <div class="contenedor-lienzo" id="contenedor">
+        <div class="modal-paleta-avanzada" id="panel-paleta-modal">
+            <div class="modal-header">
+                <span>Selección Avanzada Matrix</span>
+                <button class="btn-cerrar-modal" onclick="cerrarPaletaAvanzada()">X</button>
+            </div>
+            <div class="grid-matrix-colores" id="contenedor-grid-colores"></div>
+        </div>
+        <canvas id="pizarra"></canvas>
+        <canvas id="ventana-lupa" width="70" height="70"></canvas>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAw01368d1CnX3ij6gFWFIrujDLnctociM",
+            authDomain: "draw-with-my-baby.firebaseapp.com",
+            databaseURL: "https://draw-with-my-baby-default-rtdb.firebaseio.com",
+            projectId: "draw-with-my-baby",
+            storageBucket: "draw-with-my-baby.firebasestorage.app",
+            messagingSenderId: "1091516623352",
+            appId: "1:1091516623352:web:5876bdbbc3cbc76ad3ce0d",
+            measurementId: "G-1RT8Q6YMGV"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const lineasRef = database.ref('lineas_compartidas');
+
+        const canvas = document.getElementById('pizarra');
+        const ctx = canvas.getContext('2d');
+        const lupa = document.getElementById('ventana-lupa');
+        const ctxLupa = lupa.getContext('2d');
+        const selectorGrosor = document.getElementById('selector-grosor');
+        const valorGrosor = document.getElementById('valor-grosor');
+        const selectorZoom = document.getElementById('selector-zoom');
+        const valorZoom = document.getElementById('valor-zoom');
+        const panelPaletaModal = document.getElementById('panel-paleta-modal');
+        const contenedorGridColores = document.getElementById('contenedor-grid-colores');
+        const vistaColorActual = document.getElementById('vista-color-actual');
+        const contenedor = document.getElementById('contenedor');
+
+        canvas.width = contenedor.clientWidth || 350;
+        canvas.height = contenedor.clientHeight || 460;
+
+        let lineas = []; 
+        let lineaActual = null; 
+        let dibujando = false;
+        let startPoint = null; 
+        
+        let colorActual = '#000000';
+        let modoActual = 'normal';
+        let esPantallaDividida = false;
+        
+        let escalaZoom1 = 1.0;
+        let panX1 = 0;
+        let panY1 = 0;
+        
+        let escalaZoom2 = 1.0;
+        let panX2 = 0;
+        let panY2 = 0;
+        
+        let inicioPan = { x: 0, y: 0 };
+        let hueGlobal = 0;
+        let touchScreenX = 0;
+        let touchScreenY = 0;
+        let mostrarLupa = false;
+
+        let usarEstabilizador = false;
+        let mostrarRejilla = false;
+
+        let miRol = 'jugador1';
+
+        function construirMatrizColores() {
+            const maticesColumnas = [0, 285, 205, 175, 130, 52, 22];
+            const nivelesLuminosidad = [92, 82, 72, 62, 50, 38, 26, 14];
+            let htmlInyeccion = "";
+            
+            for (let f = 0; f < nivelesLuminosidad.length; f++) {
+                const luz = nivelesLuminosidad[f];
+                
+                maticesColumnas.forEach(hue => {
+                    const sat = (hue === 52 || hue === 22) ? 100 : 85;
+                    const colorHsl = `hsl(${hue},${sat}%,${luz}%)`;
+                    htmlInyeccion += `<div class="bloque-color-matrix" data-color="${colorHsl}" style="background: ${colorHsl};" onclick="seleccionarColorMatrix('${colorHsl}', this)"></div>`;
+                });
+                
+                const colorGris = `hsl(0,0%,${luz}%)`;
+                htmlInyeccion += `<div class="bloque-color-matrix" data-color="${colorGris}" style="background: ${colorGris};" onclick="seleccionarColorMatrix('${colorGris}', this)"></div>`;
+                
+                const colorPizarra = `hsl(215,30%,${luz}%)`;
+                htmlInyeccion += `<div class="bloque-color-matrix" data-color="${colorPizarra}" style="background: ${colorPizarra};" onclick="seleccionarColorMatrix('${colorPizarra}', this)"></div>`;
+                
+                const colorMarina = `hsl(230,25%,${luz}%)`;
+                htmlInyeccion += `<div class="bloque-color-matrix" data-color="${colorMarina}" style="background: ${colorMarina};" onclick="seleccionarColorMatrix('${colorMarina}', this)"></div>`;
+            }
+            contenedorGridColores.innerHTML = htmlInyeccion;
+        }
+
+        function abrirPaletaAvanzada() {
+            panelPaletaModal.style.display = "flex";
+            document.querySelectorAll('.bloque-color-matrix').forEach(bloque => {
+                if (bloque.getAttribute('data-color') === colorActual) {
+                    bloque.classList.add('activo');
+                } else {
+                    bloque.classList.remove('activo');
+                }
+            });
+        }
+
+        function cerrarPaletaAvanzada() { 
+            panelPaletaModal.style.display = "none"; 
+        }
+
+        function seleccionarColorMatrix(color, elemento) { 
+            cambiarColor(color, elemento); 
+            cerrarPaletaAvanzada(); 
+        }
+
+        function cambiarColor(color, elemento) {
+            colorActual = color;
+            vistaColorActual.style.backgroundColor = color;
+            document.querySelectorAll('.color-rapido, .bloque-color-matrix').forEach(el => el.classList.remove('activo'));
+            
+            if (elemento) {
+                elemento.classList.add('activo');
+            } else {
+                const elementoRapido = document.getElementById('rapido-' + color);
+                if (elementoRapido) {
+                    elementoRapido.classList.add('activo');
+                }
+            }
+            if (modoActual === 'borrador' || modoActual === 'mover') {
+                cambiarModo('normal');
+            }
+        }
+
+        function cambiarModo(modo) {
+            if (modoActual === modo) {
+                modoActual = 'normal';
+            } else {
+                modoActual = modo;
+            }
+            document.querySelectorAll('.btn').forEach(b => b.classList.remove('activo'));
+            const btnActivo = document.getElementById('btn-' + modoActual);
+            if(btnActivo) {
+                btnActivo.classList.add('activo');
+            }
+        }
+
+        selectorGrosor.addEventListener('input', function(e) {
+            valorGrosor.textContent = e.target.value;
+        });
+
+        selectorZoom.addEventListener('input', function(e) { 
+            let zoomVal = e.target.value / 10;
+            if (miRol === 'jugador1') {
+                escalaZoom1 = zoomVal;
+            } else {
+                escalaZoom2 = zoomVal;
+            }
+            valorZoom.textContent = zoomVal.toFixed(1) + 'x'; 
+        });
+
+        window.addEventListener('resize', function() {
+            if (contenedor.clientWidth > 0 && contenedor.clientHeight > 0) {
+                canvas.width = contenedor.clientWidth;
+                canvas.height = contenedor.clientHeight;
+            }
+        });
+
+        function togglePantallaDividida() { 
+            esPantallaDividida = !esPantallaDividida; 
+            const btn = document.getElementById('btn-dividido');
+            if (btn) {
+                if (esPantallaDividida) btn.classList.add('activo');
+                else btn.classList.remove('activo');
+            }
+        }
+
+        function toggleRolTest() {
+            if (miRol === 'jugador1') {
+                miRol = 'jugador2';
+                document.getElementById('btn-rol').textContent = '👤 Rol: J2';
+                selectorZoom.value = escalaZoom2 * 10;
+                valorZoom.textContent = escalaZoom2.toFixed(1) + 'x';
+            } else {
+                miRol = 'jugador1';
+                document.getElementById('btn-rol').textContent = '👤 Rol: J1';
+                selectorZoom.value = escalaZoom1 * 10;
+                valorZoom.textContent = escalaZoom1.toFixed(1) + 'x';
+            }
+        }
+
+        function obtenerPosicionMundo(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clienteX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clienteY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const sX = (clienteX - rect.left) * (canvas.width / rect.width);
+            const sY = (clienteY - rect.top) * (canvas.height / rect.height);
+            
+            let pX = (miRol === 'jugador1') ? panX1 : panX2;
+            let pY = (miRol === 'jugador1') ? panY1 : panY2;
+            let zoom = (miRol === 'jugador1') ? escalaZoom1 : escalaZoom2;
+
+            return { 
+                x: (sX - pX) / zoom, 
+                y: (sY - pY) / zoom, 
+                screenX: sX, 
+                screenY: sY 
+            };
+        }
+
+        function empezarDibujo(e) {
+            const pos = obtenerPosicionMundo(e);
+
+            if (modoActual === 'mover') { 
+                dibujando = true; 
+                let pX = (miRol === 'jugador1') ? panX1 : panX2;
+                let pY = (miRol === 'jugador1') ? panY1 : panY2;
+                inicioPan.x = (e.touches ? e.touches[0].clientX : e.clientX) - pX; 
+                inicioPan.y = (e.touches ? e.touches[0].clientY : e.clientY) - pY; 
+                return; 
+            }
+            
+            if (esPantallaDividida) {
+                if (miRol === 'jugador1' && pos.screenY > canvas.height / 2) return;
+                if (miRol === 'jugador2' && pos.screenY < canvas.height / 2) return;
+            }
+            
+            dibujando = true;
+            startPoint = { x: pos.x, y: pos.y };
+            
+            lineaActual = { 
+                id: Math.random().toString(36).substring(2, 9),
+                puntos: [{ x: pos.x, y: pos.y }], 
+                color: colorActual, 
+                grosor: parseInt(selectorGrosor.value), 
+                modo: modoActual,
+                jugador: miRol
+            };
+            
+            if (modoActual === 'spray') {
+                emitirSprayPuntos(pos.x, pos.y);
+            }
+        }
+
+        function dibujar(e) {
+            if (!dibujando) return;
+            e.preventDefault();
+            
+            if (modoActual === 'mover') { 
+                let nX = (e.touches ? e.touches[0].clientX : e.clientX) - inicioPan.x; 
+                let nY = (e.touches ? e.touches[0].clientY : e.clientY) - inicioPan.y; 
+                if (miRol === 'jugador1') {
+                    panX1 = nX; panY1 = nY;
+                } else {
+                    panX2 = nX; panY2 = nY;
+                }
+                return; 
+            }
+            
+            const pos = obtenerPosicionMundo(e);
+            if (esPantallaDividida) {
+                if (miRol === 'jugador1' && pos.screenY > canvas.height / 2) return;
+                if (miRol === 'jugador2' && pos.screenY < canvas.height / 2) return;
+            }
+
+            if (modoActual === 'regla') {
+                lineaActual.puntos = [startPoint, { x: pos.x, y: pos.y }];
+            } else if (modoActual === 'spray') {
+                emitirSprayPuntos(pos.x, pos.y);
+            } else {
+                if (usarEstabilizador && lineaActual.puntos.length > 0) {
+                    var lastP = lineaActual.puntos[lineaActual.puntos.length - 1];
+                    lineaActual.puntos.push({
+                        x: lastP.x + (pos.x - lastP.x) * 0.25,
+                        y: lastP.y + (pos.y - lastP.y) * 0.25
+                    });
+                } else {
+                    lineaActual.puntos.push({ x: pos.x, y: pos.y });
+                }
+            }
+            
+            touchScreenX = pos.screenX; 
+            touchScreenY = pos.screenY; 
+            mostrarLupa = (modoActual !== 'mover');
+        }
+
+        function terminarDibujo() {
+            if (dibujando) {
+                dibujando = false;
+                if (modoActual !== 'mover' && lineaActual) {
+                    lineas.push(lineaActual);
+                    lineasRef.push(lineaActual);
+                }
+                lineaActual = null;
+            }
+            mostrarLupa = false;
+        }
+
+        lineasRef.on('child_added', function(snapshot) {
+            var nuevaLinea = snapshot.val();
+            var existe = false;
+            for(var i = 0; i < lineas.length; i++) {
+                if(lineas[i].id === nuevaLinea.id) {
+                    existe = true;
+                    break;
+                }
+            }
+            if (!existe) {
+                lineas.push(nuevaLinea);
+            }
+        });
+
+        lineasRef.on('value', function(snapshot) {
+            if (!snapshot.exists()) {
+                lineas = [];
+            }
+        });
+
+        function emitirSprayPuntos(x, y) {
+            const grosor = parseInt(selectorGrosor.value);
+            for (let i = 0; i < grosor * 1.5; i++) {
+                const angulo = Math.random() * Math.PI * 2;
+                const radio = Math.random() * (grosor * 1.5);
+                lineaActual.puntos.push({ x: x + Math.cos(angulo) * radio, y: y + Math.sin(angulo) * radio });
+            }
+        }
+
+        function ejecutarTrazoCamino(linea) {
+            ctx.beginPath();
+            if (linea.puntos.length === 1) {
+                var pSingle = linea.puntos[0];
+                ctx.moveTo(pSingle.x, pSingle.y);
+                ctx.lineTo(pSingle.x + 0.01, pSingle.y);
+            } else {
+                linea.puntos.forEach((p, i) => {
+                    if (linea.modo === 'arcoiris') {
+                        ctx.strokeStyle = `hsl(${(hueGlobal + i * 4) % 360}, 100%, 50%)`;
+                    }
+                    if (i === 0) {
+                        ctx.moveTo(p.x, p.y);
+                    } else {
+                        ctx.lineTo(p.x, p.y);
+                    }
+                    if (linea.modo === 'arcoiris' && i > 0) { 
+                        ctx.stroke(); 
+                        ctx.beginPath(); 
+                        ctx.moveTo(p.x, p.y); 
+                    }
+                });
+            }
+            if (linea.modo !== 'arcoiris') {
+                ctx.stroke();
+            }
+        }
+
+        function dibujarLinea(linea) {
+            if (linea.puntos.length === 0) return;
+            ctx.save();
+            ctx.lineWidth = linea.grosor;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = linea.color;
+            
+            if (linea.modo === 'borrador') {
+                ctx.strokeStyle = '#ffffff';
+            } else if (linea.modo === 'cuadrado') {
+                ctx.lineCap = 'square';
+            } else if (linea.modo === 'manga') { 
+                ctx.lineWidth = 1.5; 
+                ctx.lineCap = 'round'; 
+            } else if (linea.modo === 'neon') { 
+                const pulso = 12 + Math.sin(Date.now() * 0.012) * 6; 
+                ctx.shadowBlur = pulso; 
+                ctx.shadowColor = linea.color; 
+            } else if (linea.modo === 'spray') { 
+                ctx.fillStyle = linea.color; 
+                linea.puntos.forEach(p => ctx.fillRect(p.x, p.y, 1.2, 1.2)); 
+                ctx.restore(); 
+                return; 
+            }
+            
+            if (linea.modo === 'simetria') {
+                ejecutarTrazoCamino(linea);
+                ctx.save(); 
+                ctx.translate(canvas.width, 0); 
+                ctx.scale(-1, 1); 
+                ejecutarTrazoCamino(linea); 
+                ctx.restore();
+            } else if (linea.modo === 'cinta') {
+                ctx.save(); 
+                ctx.translate(5, 5); 
+                ctx.strokeStyle = linea.color; 
+                ctx.globalAlpha = 0.4; 
+                ejecutarTrazoCamino(linea); 
+                ctx.restore();
+                ejecutarTrazoCamino(linea);
+            } else if (linea.modo === 'eco') {
+                for (let k = 2; k >= 0; k--) { 
+                    ctx.save(); 
+                    ctx.globalAlpha = 1.0 - (k * 0.32); 
+                    ctx.translate(-k * 5, -k * 3); 
+                    ejecutarTrazoCamino(linea); 
+                    ctx.restore(); 
+                }
+            } else {
+                ejecutarTrazoCamino(linea);
+            }
+            ctx.restore();
+        }
+
+        function bucleRender() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let activeZoom = (miRol === 'jugador1') ? escalaZoom1 : escalaZoom2;
+            let activePanX = (miRol === 'jugador1') ? panX1 : panX2;
+            let activePanY = (miRol === 'jugador1') ? panY1 : panY2;
+
+            ctx.save();
+            if (esPantallaDividida) {
+                ctx.beginPath();
+                ctx.rect(0, 0, canvas.width, canvas.height / 2);
+                ctx.clip();
+            }
+            ctx.save(); 
+            let renderPanX1 = esPantallaDividida ? panX1 : activePanX;
+            let renderPanY1 = esPantallaDividida ? panY1 : activePanY;
+            let renderZoom1 = esPantallaDividida ? escalaZoom1 : activeZoom;
+            
+            ctx.translate(renderPanX1, renderPanY1); 
+            ctx.scale(renderZoom1, renderZoom1);
+            if (mostrarRejilla) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                for (var x = -2000; x < 2000; x += 20) {
+                    ctx.moveTo(x, -2000); ctx.lineTo(x, 2000);
+                }
+                for (var y = -2000; y < 2000; y += 20) {
+                    ctx.moveTo(-2000, y); ctx.lineTo(2000, y);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+            lineas.forEach(function(l) {
+                if (!esPantallaDividida || l.jugador === 'jugador1') {
+                    dibujarLinea(l);
+                }
+            });
+            if (lineaActual && (!esPantallaDividida || lineaActual.jugador === 'jugador1')) {
+                dibujarLinea(lineaActual);
+            }
+            ctx.restore();
+            ctx.restore();
+
+            if (esPantallaDividida) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+                ctx.clip();
+                ctx.save(); 
+                ctx.translate(panX2, panY2); 
+                ctx.scale(escalaZoom2, escalaZoom2);
+                if (mostrarRejilla) {
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    for (var x = -2000; x < 2000; x += 20) {
+                        ctx.moveTo(x, -2000); ctx.lineTo(x, 2000);
+                    }
+                    for (var y = -2000; y < 2000; y += 20) {
+                        ctx.moveTo(-2000, y); ctx.lineTo(2000, y);
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                lineas.forEach(function(l) {
+                    if (l.jugador === 'jugador2') {
+                        dibujarLinea(l);
+                    }
+                });
+                if (lineaActual && lineaActual.jugador === 'jugador2') {
+                    dibujarLinea(lineaActual);
+                }
+                ctx.restore();
+                ctx.restore();
+            }
+            
+            if (esPantallaDividida) { 
+                ctx.save(); 
+                ctx.strokeStyle = '#ff4a5a'; 
+                ctx.lineWidth = 2; 
+                ctx.setLineDash([6, 6]); 
+                ctx.beginPath(); 
+                ctx.moveTo(0, canvas.height / 2); 
+                ctx.lineTo(canvas.width, canvas.height / 2); 
+                ctx.stroke(); 
+                ctx.restore(); 
+            }
+            
+            if (mostrarLupa && canvas.width > 0 && canvas.height > 0) { 
+                lupa.style.display = 'block'; 
+                lupa.style.left = (touchScreenX - 35) + 'px'; 
+                lupa.style.top = (touchScreenY - 90) + 'px'; 
+                ctxLupa.clearRect(0, 0, lupa.width, lupa.height); 
+                ctxLupa.drawImage(canvas, touchScreenX - 15, touchScreenY - 15, 30, 30, 0, 0, lupa.width, lupa.height); 
+            } else {
+                lupa.style.display = 'none'; 
+            }
+            
+            hueGlobal = (hueGlobal + 2) % 360;
+            requestAnimationFrame(bucleRender);
+        }
+
+        function toggleEstabilizador() {
+            usarEstabilizador = !usarEstabilizador;
+            const btn = document.getElementById('btn-estabilizador');
+            if (btn) {
+                if (usarEstabilizador) btn.classList.add('activo');
+                else btn.classList.remove('activo');
+            }
+        }
+
+        function toggleRejilla() {
+            mostrarRejilla = !mostrarRejilla;
+            const btn = document.getElementById('btn-rejilla');
+            if (btn) {
+                if (mostrarRejilla) btn.classList.add('activo');
+                else btn.classList.remove('activo');
+            }
+        }
+
+        function deshacer() { 
+            if (lineas.length > 0) {
+                var ultima = lineas[lineas.length - 1];
+                if (ultima.jugador === miRol) {
+                    lineas.pop();
+                    lineasRef.set(lineas);
+                }
+            }
+        }
+        
+        function limpiarLienzo() { 
+            if (confirm("¿Limpiar por completo tu obra artística?")) {
+                lineasRef.remove();
+            }
+        }
+        
+        function descargarDibujo() { 
+            const link = document.createElement('a'); 
+            link.download = 'nuestro-arte-note20.png'; 
+            
+            const estadoRejillaOriginal = mostrarRejilla;
+            const estadoDivididoOriginal = esPantallaDividida;
+            
+            const panX1Orig = panX1; const panY1Orig = panY1; const zoom1Orig = escalaZoom1;
+            const panX2Orig = panX2; const panY2Orig = panY2; const zoom2Orig = escalaZoom2;
+            
+            mostrarRejilla = false;
+            esPantallaDividida = false;
+            
+            panX1 = 0; panY1 = 0; escalaZoom1 = 1.0;
+            panX2 = 0; panY2 = 0; escalaZoom2 = 1.0;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); 
+            lineas.forEach(l => dibujarLinea(l));
+            ctx.restore();
+            
+            link.href = canvas.toDataURL(); 
+            link.click(); 
+            
+            mostrarRejilla = estadoRejillaOriginal;
+            esPantallaDividida = estadoDivididoOriginal;
+            
+            panX1 = panX1Orig; panY1 = panY1Orig; escalaZoom1 = zoom1Orig;
+            panX2 = panX2Orig; panY2 = panY2Orig; escalaZoom2 = zoom2Orig;
+        }
+
+        canvas.addEventListener('mousedown', empezarDibujo);
+        canvas.addEventListener('mouseup', terminarDibujo);
+        canvas.addEventListener('mousemove', dibujar);
+        canvas.addEventListener('touchstart', empezarDibujo, { passive: false });
+        canvas.addEventListener('touchend', terminarDibujo);
+        canvas.addEventListener('touchmove', dibujar, { passive: false });
+
+        construirMatrizColores();
+        requestAnimationFrame(bucleRender);
+    </script>
+</body>
+</html>
