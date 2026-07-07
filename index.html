@@ -331,6 +331,10 @@
 
 <!-- BOTÓN PARA ENCENDER EL JUEGO -->
 <button class="btn" id="btn-modo-juego" onclick="alternarModoJuego()" style="background: #ffcc00; color: black; font-weight: bold;">🎮 Jugar Pictionary</button>
+<div id="historial-intentos" style="background: #151515; padding: 6px; border-radius: 8px; margin-top: 6px; text-align: center; border: 1px dashed #ff4444;">
+    <span style="color: #ff6b6b; font-size: 11px; font-weight: bold; text-transform: uppercase;">❌ Intentos fallidos:</span>
+    <p id="lista-intentos" style="color: #bbb; margin: 4px 0 0 0; font-size: 13px; font-style: italic;">Ninguno aún</p>
+</div>
 
         <div class="fila">
             <button class="btn" id="btn-estabilizador" onclick="toggleEstabilizador()">✨ Suave</button>
@@ -1127,19 +1131,23 @@ function cambiarPalabraAlAzar() {
 }
 
 // Verificar si el adivinador acertó
-function verificarRespuesta() {
-    const intento = document.getElementById('input-adivinar').value.trim().toLowerCase();
-    database.ref('partida_juego/palabra').once('value', (snapshot) => {
-        const palabraCorrecta = snapshot.val();
-        if (intento === palabraCorrecta) {
-            // Declarar victoria en Firebase
-            database.ref('partida_juego/estado').set('victoria');
-            document.getElementById('input-adivinar').value = '';
-        } else {
-            alert('❌ ¡Nop! Sigue intentando.');
+        function verificarRespuesta() {
+            const intento = document.getElementById('input-adivinar').value.trim().toLowerCase();
+            if (!intento) return; // Evita enviar espacios vacíos
+            
+            database.ref('partida_juego/palabra').once('value', (snapshot) => {
+                const palabraCorrecta = snapshot.val();
+                if (intento === palabraCorrecta) {
+                    database.ref('partida_juego/estado').set('victoria');
+                    document.getElementById('input-adivinar').value = '';
+                } else {
+                    // Guardar intento fallido en Firebase para que el dibujante lo vea
+                    database.ref('partida_juego/intentos').push(intento);
+                    document.getElementById('input-adivinar').value = '';
+                }
+            });
         }
-    });
-}
+
 
 // Escuchar cambios de Firebase en tiempo real para coordinar las dos pantallas
 database.ref('partida_juego').on('value', (snapshot) => {
@@ -1189,17 +1197,19 @@ database.ref('partida_juego').on('value', (snapshot) => {
         `;
         document.body.appendChild(anuncio);
 
-        // Limpiar la pizarra automáticamente para la nueva ronda
-        if (typeof limpiarLienzo === 'function') limpiarLienzo();
+                // Limpiar la pizarra automáticamente de forma silenciosa sin alertas molestas
+        lineasRef.remove();
 
         // Esperar 3 segundos para limpiar el aviso y rotar el turno
         setTimeout(() => {
             anuncio.remove();
-            // Solo el Jugador 1 gestiona el cambio en Firebase para evitar doble gasto de recursos
             if (miRol === 'jugador1') {
                 let siguienteTurno = (datos.turno === 'jugador2') ? 'jugador1' : 'jugador2';
                 const indice = Math.floor(Math.random() * palabrasDiccionario.length);
                 const nuevaPalabra = palabrasDiccionario[indice];
+                
+                // Limpiamos también la lista de intentos fallidos de la ronda anterior
+                database.ref('partida_juego/intentos').remove();
                 
                 database.ref('partida_juego').update({
                     turno: siguienteTurno,
@@ -1208,7 +1218,24 @@ database.ref('partida_juego').on('value', (snapshot) => {
                 });
             }
         }, 3000);
+
     }
+});
+// Escuchar y mostrar los intentos fallidos de la ronda actual en la caja de control
+database.ref('partida_juego/intentos').on('value', (snapshot) => {
+    const listaTexto = document.getElementById('lista-intentos');
+    if (!snapshot.exists()) {
+        listaTexto.textContent = "Ninguno aún";
+        return;
+    }
+    
+    let palabrasFalladas = [];
+    snapshot.forEach((child) => {
+        palabrasFalladas.push(child.val().toUpperCase());
+    });
+    
+    // Muestra todas las palabras separadas por comas
+    listaTexto.textContent = palabrasFalladas.join(', ');
 });
 
     </script>
