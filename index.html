@@ -410,6 +410,10 @@
         let mostrarRejilla = false;
 
         let miRol = 'jugador1';
+        // Nuevas variables para el control de pellizco táctil
+        let distanciaInicial = 0;
+        let zoomInicial = 1.0;
+
 
         function construirMatrizColores() {
             const maticesColumnas = [0, 285, 205, 175, 130, 52, 22];
@@ -559,10 +563,22 @@ if (parametrosURL.get('p') === '2') {
             };
         }
 
-        function empezarDibujo(e) {
+        
+                function empezarDibujo(e) {
+            // DETECTAR GESTO DE 2 DEDOS (PELLIZCO)
+            if (e.touches && e.touches.length === 2) {
+                dibujando = false; 
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                distanciaInicial = Math.sqrt(dx * dx + dy * dy);
+                zoomInicial = (miRol === 'jugador1') ? escalaZoom1 : escalaZoom2;
+                return;
+            }
+
             const pos = obtenerPosicionMundo(e);
 
             if (modoActual === 'mover') { 
+
                 dibujando = true; 
                 let pX = (miRol === 'jugador1') ? panX1 : panX2;
                 let pY = (miRol === 'jugador1') ? panY1 : panY2;
@@ -593,13 +609,47 @@ if (parametrosURL.get('p') === '2') {
             }
         }
 
-        function dibujar(e) {
+                function dibujar(e) {
+            // PROCESAR ZOOM POR PELLIZCO (2 DEDOS ACTIVOS)
+            if (e.touches && e.touches.length === 2) {
+                e.preventDefault();
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const distActual = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distanciaInicial > 0) {
+                    const factor = distActual / distanciaInicial;
+                    let nuevoZoom = zoomInicial * factor;
+                    
+                    // Límites de seguridad: No acercar a más de 4.0x ni alejar a menos de 0.5x
+                    nuevoZoom = Math.max(0.5, Math.min(4.0, nuevoZoom));
+                    
+                    if (miRol === 'jugador1') {
+                        escalaZoom1 = nuevoZoom;
+                    } else {
+                        escalaZoom2 = nuevoZoom;
+                    }
+                    
+                    // Sincroniza la interfaz visual y sliders de la barra superior
+                    selectorZoom.value = nuevoZoom * 10;
+                    valorZoom.textContent = nuevoZoom.toFixed(1) + 'x';
+                }
+                return;
+            }
+
             if (!dibujando) return;
             e.preventDefault();
             
             if (modoActual === 'mover') { 
                 let nX = (e.touches ? e.touches[0].clientX : e.clientX) - inicioPan.x; 
                 let nY = (e.touches ? e.touches[0].clientY : e.clientY) - inicioPan.y; 
+                
+                // CONTROL MULTI-PÉRDIDA: Evita que el lienzo sea arrastrado al infinito vacío
+                const margenLimiteX = canvas.width * 1.2;
+                const margenLimiteY = canvas.height * 1.2;
+                nX = Math.max(-margenLimiteX, Math.min(margenLimiteX, nX));
+                nY = Math.max(-margenLimiteY, Math.min(margenLimiteY, nY));
+
                 if (miRol === 'jugador1') {
                     panX1 = nX; panY1 = nY;
                 } else {
@@ -607,6 +657,7 @@ if (parametrosURL.get('p') === '2') {
                 }
                 return; 
             }
+
             
             const pos = obtenerPosicionMundo(e);
             if (esPantallaDividida) {
@@ -912,7 +963,7 @@ if (parametrosURL.get('p') === '2') {
             }
         }
         
-        function descargarDibujo() { 
+                function descargarDibujo() { 
             const link = document.createElement('a'); 
             link.download = 'nuestro-arte-note20.png'; 
             
@@ -928,20 +979,67 @@ if (parametrosURL.get('p') === '2') {
             panX1 = 0; panY1 = 0; escalaZoom1 = 1.0;
             panX2 = 0; panY2 = 0; escalaZoom2 = 1.0;
             
+            // 1. Limpiar el lienzo virtual
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // SOLUCIÓN AL NEGATIVO: Forzar un fondo blanco sólido real antes de pintar los trazos
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             ctx.save(); 
+            
+            // SOLUCIÓN PLAYER 2: Calcular los límites automáticos de todo lo que se ha dibujado
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let tienePuntos = false;
+
+            lineas.forEach(function(l) {
+                l.puntos.forEach(function(p) {
+                    if (p.x < minX) minX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y > maxY) maxY = p.y;
+                    tienePuntos = true;
+                });
+            });
+
+            // Si hay trazos en la pizarra, calculamos el encuadre perfecto
+            if (tienePuntos) {
+                const margen = 30; // Espacio de respeto para que el dibujo no toque las esquinas de la foto
+                const anchoDibujo = maxX - minX;
+                const altoDibujo = maxY - minY;
+                
+                // Encontrar la escala ideal para que el dibujo quepa entero en el lienzo
+                const escalaX = (canvas.width - margen * 2) / anchoDibujo;
+                const escalaY = (canvas.height - margen * 2) / altoDibujo;
+                let zoomAjustado = Math.min(escalaX, escalaY);
+                
+                // Evitamos que dibujos muy pequeños se estiren y se pixelen horriblemente
+                if (zoomAjustado > 1.0) zoomAjustado = 1.0;
+                
+                // Centrar matemáticamente el lienzo de ambos jugadores
+                const centroX = (canvas.width - anchoDibujo * zoomAjustado) / 2 - minX * zoomAjustado;
+                const centroY = (canvas.height - altoDibujo * zoomAjustado) / 2 - minY * zoomAjustado;
+                
+                ctx.translate(centroX, centroY);
+                ctx.scale(zoomAjustado, zoomAjustado);
+            }
+
+            // Redibujar todas las líneas con el encuadre y fondo blanco optimizados
             lineas.forEach(l => dibujarLinea(l));
             ctx.restore();
             
-            link.href = canvas.toDataURL(); 
+            // Exportar imagen limpia en alta definición
+            link.href = canvas.toDataURL('image/png'); 
             link.click(); 
             
+            // Restaurar el estado de la pantalla original para seguir dibujando
             mostrarRejilla = estadoRejillaOriginal;
             esPantallaDividida = estadoDivididoOriginal;
             
             panX1 = panX1Orig; panY1 = panY1Orig; escalaZoom1 = zoom1Orig;
             panX2 = panX2Orig; panY2 = panY2Orig; escalaZoom2 = zoom2Orig;
         }
+
 
         canvas.addEventListener('mousedown', empezarDibujo);
         canvas.addEventListener('mouseup', terminarDibujo);
