@@ -963,7 +963,7 @@ if (parametrosURL.get('p') === '2') {
             }
         }
         
-                function descargarDibujo() { 
+                        function descargarDibujo() { 
             const link = document.createElement('a'); 
             link.download = 'nuestro-arte-note20.png'; 
             
@@ -973,22 +973,29 @@ if (parametrosURL.get('p') === '2') {
             const panX1Orig = panX1; const panY1Orig = panY1; const zoom1Orig = escalaZoom1;
             const panX2Orig = panX2; const panY2Orig = panY2; const zoom2Orig = escalaZoom2;
             
+            // GUARDAR TAMAÑO ORIGINAL: Guardamos la resolución baja de la pantalla
+            const anchoOriginal = canvas.width;
+            const altoOriginal = canvas.height;
+            
+            // MULTIPLICADOR ULTRA-HD: Escalamos el lienzo 4 veces más grande para curvas perfectas
+            const multiplicadorHD = 4;
+            canvas.width = anchoOriginal * multiplicadorHD;
+            canvas.height = altoOriginal * multiplicadorHD;
+            
             mostrarRejilla = false;
             esPantallaDividida = false;
             
             panX1 = 0; panY1 = 0; escalaZoom1 = 1.0;
             panX2 = 0; panY2 = 0; escalaZoom2 = 1.0;
             
-            // 1. Limpiar el lienzo virtual
+            // Limpiar y aplicar fondo blanco en la resolución gigante
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // SOLUCIÓN AL NEGATIVO: Forzar un fondo blanco sólido real antes de pintar los trazos
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.save(); 
             
-            // SOLUCIÓN PLAYER 2: Calcular los límites automáticos de todo lo que se ha dibujado
+            // Calcular los límites automáticos de todo lo que se ha dibujado
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             let tienePuntos = false;
 
@@ -1002,21 +1009,16 @@ if (parametrosURL.get('p') === '2') {
                 });
             });
 
-            // Si hay trazos en la pizarra, calculamos el encuadre perfecto
             if (tienePuntos) {
-                const margen = 30; // Espacio de respeto para que el dibujo no toque las esquinas de la foto
+                const margen = 30 * multiplicadorHD; // El margen de respeto también se escala en HD
                 const anchoDibujo = maxX - minX;
                 const altoDibujo = maxY - minY;
                 
-                // Encontrar la escala ideal para que el dibujo quepa entero en el lienzo
                 const escalaX = (canvas.width - margen * 2) / anchoDibujo;
                 const escalaY = (canvas.height - margen * 2) / altoDibujo;
                 let zoomAjustado = Math.min(escalaX, escalaY);
                 
-                // Evitamos que dibujos muy pequeños se estiren y se pixelen horriblemente
-                if (zoomAjustado > 1.0) zoomAjustado = 1.0;
-                
-                // Centrar matemáticamente el lienzo de ambos jugadores
+                // Centrar matemáticamente el dibujo en el nuevo espacio de alta resolución
                 const centroX = (canvas.width - anchoDibujo * zoomAjustado) / 2 - minX * zoomAjustado;
                 const centroY = (canvas.height - altoDibujo * zoomAjustado) / 2 - minY * zoomAjustado;
                 
@@ -1024,21 +1026,25 @@ if (parametrosURL.get('p') === '2') {
                 ctx.scale(zoomAjustado, zoomAjustado);
             }
 
-            // Redibujar todas las líneas con el encuadre y fondo blanco optimizados
+            // Redibujar las líneas (ahora se renderizan con 4 veces más densidad de píxeles)
             lineas.forEach(l => dibujarLinea(l));
             ctx.restore();
             
-            // Exportar imagen limpia en alta definición
+            // Exportar imagen limpia en alta resolución
             link.href = canvas.toDataURL('image/png'); 
             link.click(); 
             
-            // Restaurar el estado de la pantalla original para seguir dibujando
+            // RESTAURAR RESOLUCIÓN ORIGINAL: Devolvemos el canvas a su tamaño de pantalla normal
+            canvas.width = anchoOriginal;
+            canvas.height = altoOriginal;
+            
             mostrarRejilla = estadoRejillaOriginal;
             esPantallaDividida = estadoDivididoOriginal;
             
             panX1 = panX1Orig; panY1 = panY1Orig; escalaZoom1 = zoom1Orig;
             panX2 = panX2Orig; panY2 = panY2Orig; escalaZoom2 = zoom2Orig;
         }
+
 
 
         canvas.addEventListener('mousedown', empezarDibujo);
