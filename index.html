@@ -647,11 +647,13 @@ if (parametrosURL.get('p') === '2') {
             mostrarLupa = false;
         }
 
-        lineasRef.on('child_added', function(snapshot) {
+                lineasRef.on('child_added', function(snapshot) {
             var nuevaLinea = snapshot.val();
+            nuevaLinea.keyFirebase = snapshot.key; // <- Guardamos la llave única de Firebase
             var existe = false;
             for(var i = 0; i < lineas.length; i++) {
                 if(lineas[i].id === nuevaLinea.id) {
+                    lineas[i].keyFirebase = snapshot.key;
                     existe = true;
                     break;
                 }
@@ -660,6 +662,13 @@ if (parametrosURL.get('p') === '2') {
                 lineas.push(nuevaLinea);
             }
         });
+
+        // <- NUEVO: Avisa a ambos navegadores cuando un trazo es eliminado
+        lineasRef.on('child_removed', function(snapshot) {
+            var idEliminado = snapshot.val().id;
+            lineas = lineas.filter(function(l) { return l.id !== idEliminado; });
+        });
+
 
         lineasRef.on('value', function(snapshot) {
             if (!snapshot.exists()) {
@@ -882,15 +891,20 @@ if (parametrosURL.get('p') === '2') {
             }
         }
 
-        function deshacer() { 
-            if (lineas.length > 0) {
-                var ultima = lineas[lineas.length - 1];
-                if (ultima.jugador === miRol) {
-                    lineas.pop();
-                    lineasRef.set(lineas);
+                function deshacer() { 
+            // Buscamos de atrás hacia adelante tu último trazo realizado
+            for (var i = lineas.length - 1; i >= 0; i--) {
+                if (lineas[i].jugador === miRol) {
+                    var keyFirebase = lineas[i].keyFirebase;
+                    if (keyFirebase) {
+                        // Lo eliminamos directamente de Firebase usando su identificador
+                        lineasRef.child(keyFirebase).remove();
+                    }
+                    break; // Salimos del ciclo para borrar únicamente una línea
                 }
             }
         }
+
         
         function limpiarLienzo() { 
             if (confirm("¿Limpiar por completo tu obra artística?")) {
